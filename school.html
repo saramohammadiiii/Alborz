@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Application</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+    <!-- سایر استایل‌ها -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-search@2.9.0/dist/leaflet-search.min.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw/dist/leaflet.draw.css"/>
+    <style>
+        html, body { height: 100%; margin: 0; }
+        #map { height: 100%; }
+        #coordinates, #measureMenu, #buttonContainer, #zoomContainer, #searchBox, #basemapsDropdown, .overview-button, .overview-map, #customDrawToolbar { position: absolute; }
+        #coordinates { background: white; padding: 5px; border: 1px solid black; z-index: 1000; bottom: 10px; left: calc(50% - 75px); text-align: center; border-radius: 5px; }
+        .button { background: transparent; padding: 5px; cursor: pointer; z-index: 1001; transition: opacity 0.2s; margin: 5px; font-size: 17px; border: 0; }
+        .button span { opacity: 0; transition: opacity 0.2s; }
+        .button:hover span { opacity: 1; }
+        .zoom-button { opacity: 1 !important; transition: none; font-size: 15px; padding: 10px; font-weight: bold; border-radius: 50%; background-color: gainsboro; }
+        #buttonContainer { top: 10px; left: 20px; z-index: 1001; display: flex; flex-direction: column; }
+        #zoomContainer { top: 30px; right: 10px; background: transparent; padding: 10px; z-index: 1001; }
+        #searchBox { top: 120px; left: 50px; z-index: 1001; display: none; width: calc(20% - 20px); }
+        #searchInput { padding: 5px; border: 1px solid #ccc; width: 70%; }
+        #searchSubmit { background: white; border: 1px solid #ccc; cursor: pointer; padding: 5px; }
+        #basemapsDropdown { display: none; bottom: 80px; right: 105px; background: white; border: 1px solid #ccc; padding: 10px; z-index: 1001; box-shadow: 0 4px 8px rgba(0,0,0,0.2); grid-template-columns: repeat(2, 1fr); gap: 10px; width: 300px; }
+        .basemap-option { display: flex; align-items: center; padding: 5px; cursor: pointer; }
+        .basemap-option img { width: 50px; height: auto; margin-right: 5px; }
+        .basemap-option:hover { background-color: #f0f0f0; }
+        .overview-button { bottom: 30px; right: 10px; background: transparent; padding: 10px; cursor: pointer; font-size: 26px; z-index: 1001; opacity: 0.7; transition: opacity 0.2s; }
+        .overview-button:hover { opacity: 1; }
+        .overview-map { position: absolute;bottom: 30px;right: 60px; width: 200px; height: 150px; border: 2px solid #ccc; z-index: 1002; display: none; }
+        .bounding-box {position: absolute;border: 2px dashed red;pointer-events: none;display: none;}
+        @media (max-width: 600px) { .button { font-size: 12px; padding: 8px; } #coordinates { font-size: 12px; padding: 4px; } }
+        @media (max-width: 600px) {.legend-container { font-size: 12px; padding: 8px;}.legend-color {  width: 12px;height: 12px;  }}
+        #customDrawToolbar { top: 200px; left: 50px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); display: none; }
+        #customDrawToolbar a { display: inline-block; margin: 5px 0; padding: 5px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; text-align: center; cursor: pointer; }
+        .legend-container {position: absolute; bottom: 45px;left: 60px;z-index: 1000;background:#f0f0f0;padding: 10px;border: 1px solid #ccc;border-radius: 5px;box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2); display: none; }
+        .legend-toggle {position: absolute; bottom: 50px;left: 10px;z-index: 1001;background: white;padding: 10px; border: 1px solid #ccc; border-radius: 5px;cursor: pointer;box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);}
+        .legend-toggle i {font-size: 20px;color: #333;}
+        .tool-section { display: flex; flex-direction: row; margin-bottom: 5px; padding: 5px; border: 1px solid #ccc; border-radius: 5px; background-color: #f9f9f9; width: 200px; }
+        .tool-section h4 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+        .tool-section button, .tool-section select { display: block; margin: 5px 0; padding: 5px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; width: 100%; }
+        .tool-section div { font-size: 12px; margin-top: 5px; }
+        .horizontal-tools { display: flex; flex-direction: row; gap: 10px; }
+        .tool-button { background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; padding: 10px; cursor: pointer; font-size: 16px; }
+        .shape-tools { display: none; margin-top: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background-color: #f9f9f9; }
+        .legend-group {margin-bottom: 10px; padding: 8px; display: flex; align-items: center;transition: background-color 0.3s ease;}
+        .legend-group:hover {background-color: #6056563f;}
+        .legend-color {width: 10px;height: 10px;border-radius: 50%;display: inline-block;margin-right: 8px;border: 2px solid #fff;}
+        #basemapsButton {position: absolute;bottom: 80px;right: 20px; z-index: 1001; opacity: 0.7; transition: opacity 0.2s;width: ;}
+        #basemapsButton:hover {opacity: 1; /* افزایش شفافیت هنگام hover */}
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="coordinates">Coordinates:</div>
+    <div id="zoomContainer">
+        <div class="zoom-button" onclick="zoomIn()">+</div>
+        <div class="zoom-button" onclick="resetView()"><i class="fas fa-home"></i></div>
+        <div class="zoom-button" onclick="zoomOut()">−</div>
+    </div>
+    
+    <div class="overview-button" onclick="toggleOverview()"><i class="fas fa-eye"></i></div>
+    <div id="basemapsButton" class="button" onclick="toggleBasemaps()"><i class="fas fa-layer-group"></i></div>
+    <div id="basemapsDropdown">
+        <div class="basemap-option" onclick="setBasemap('Blank')"><img src="image/blank.jpg" alt="Blank"> Blank</div>
+        <div class="basemap-option" onclick="setBasemap('OSM')"><img src="image/osm.jpg" alt="OSM"> OSM</div>
+        <div class="basemap-option" onclick="setBasemap('Google Satellite')"><img src="image/google_satellite.jpg" alt="Google Satellite"> Google Satellite</div>
+        <div class="basemap-option" onclick="setBasemap('Google Hybrid')"><img src="image/hybrid.jpg" alt="Google Hybrid"> Google Hybrid</div>
+    </div>
+    <div id="buttonContainer">
+        
+        <div id="goToXYButton" class="button" onclick="goToXY()"><i class="fas fa-map"></i> <span>Go To XY</span></div>
+        <div id="findLocationButton" class="button" onclick="findLocation()"><i class="fas fa-map-marker-alt"></i> <span>Find My Location</span></div>
+        <div id="searchButton" class="button" onclick="toggleSearch()"><i class="fas fa-search"></i> <span>Search</span></div>
+        <div class="button" onclick="printMap()"><i class="fas fa-print"></i> <span>Print</span></div>
+        <div> <button class="button" id="toggleDraw"><i class="fas fa-ruler"></i></button> </div>
+       
+    </div>
+    <div id="customDrawToolbar">
+        <div class="horizontal-tools">
+            <button id="drawPolygon" class="tool-button"><i class="fas fa-draw-polygon"></i></button>
+            <button id="drawPolyline" class="tool-button"><i class="fas fa-stream"></i></button>
+            <button id="drawMarker" class="tool-button"><i class="fas fa-map-marker-alt"></i></button>
+            <button id="deleteTools" class="tool-button"><i class="fas fa-trash-alt"></i></button>
+        </div>
+        <div id="polygonTools" class="shape-tools">
+            <select id="unitSelectPolygon">
+                <option value="m2">Sq Meters</option>
+                <option value="km2">Sq Kilometers</option>
+            </select>
+            <div>Area: <span id="areaValue">0</span></div>
+        </div>
+        <div id="polylineTools" class="shape-tools">
+            <select id="unitSelectPolyline">
+                <option value="m">Meters</option>
+                <option value="km">Kilometers</option>
+            </select>
+            <div>طول: <span id="lengthValue">0</span></div>
+        </div>
+        <div id="markerTools" class="shape-tools">
+            <select id="coordSystemSelect">
+                <option value="degree">Lan/Lat (Decimal)</option>
+                <option value="dms">Lon/Lat (DMS)</option>
+                <option value="utm">UTM</option>
+            </select>
+            <div><span id="coordinateValue">0, 0</span></div>
+        </div>
+    </div>
+    <div id="searchBox">
+        <input type="text" id="searchInput" placeholder="...Search for a school">
+        <button id="searchSubmit" onclick="searchSchool()">Search</button>
+        <button id="findNearest" onclick="findNearestSchool()">Find Nearest School</button>
+        <button id="clearSearch" onclick="clearSearch()">Delete</button>
+    </div>
+    <div class="overview-map" id="overviewMap">
+        <div class="bounding-box" id="boundingBox"></div>
+    </div>
+
+    <!-- اضافه کردن دکمه و راهنما به HTML -->
+    <div class="legend-toggle" onclick="toggleLegend()">
+        <i class="fas fa-layer-group"></i> <!-- آیکون اطلاعات -->
+    </div>
+
+    <div class="legend-container" id="legendContainer">
+        <h4>Legend</h4>
+        
+        <div class="legend-group">
+            <input type="checkbox" id="regionCheckbox" checked onclick="toggleRegionLayer()">
+            <label for="regionCheckbox">شهرستان‌ها</label>
+        </div>
+    
+        <div class="legend-group">
+            <input type="checkbox" id="schoolLayerCheckbox" checked onclick="toggleSchoolLayer()">
+            <label for="schoolLayerCheckbox">تعداد مدارس </label>
+            <div class="legend-subgroup">
+                <span class="legend-color" style="background: purple;"></span><span>0-10 </span><br>
+                <span class="legend-color" style="background: orange;"></span> <span>11-20 </span><br>
+                <span class="legend-color" style="background: pink;"></span><span>21-30 </span><br>
+                <span class="legend-color" style="background: red;"></span><span>30>=</span>
+            </div>
+        </div>
+    </div>
+    <div id="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; background: white; padding: 20px; border: 1px solid #ccc;">
+        در حال بارگذاری...
+    </div>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBY1klSXsRSLzv7r5N094y1oSGZ2l9PpEM&callback=initMap" async defer></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-geometryutil@0.9.3/src/leaflet.geometryutil.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-draw/dist/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-search@2.9.0/dist/leaflet-search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+    <script>
+        // تابع تبدیل مختصات به UTM
+        function latLngToUtm(lat, lng) {
+            proj4.defs("EPSG:4326", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs");
+            proj4.defs("EPSG:32633", "+proj=utm +zone=33 +ellps=WGS84 +datum=WGS84 +units=m +no_defs");
+            var utm = proj4("EPSG:4326", "EPSG:32633", [lng, lat]);
+            var zone = Math.floor((lng + 180) / 6) + 1;
+            return { easting: utm[0], northing: utm[1], zone: zone };
+        }
+    
+        // تابع نمایش/مخفی کردن راهنما
+        function toggleLegend() {
+            var legendContainer = document.getElementById('legendContainer');
+            if (legendContainer.style.display === 'none' || legendContainer.style.display === '') {
+                legendContainer.style.display = 'block'; // نمایش راهنما
+            } else {
+                legendContainer.style.display = 'none'; // مخفی کردن راهنما
+            }
+        }
+    
+        var map = L.map('map', { zoomControl: false }).setView([36.009, 50.88], 9);
+        var tileLayers = {
+        "Blank": L.tileLayer(''),
+        "Google Satellite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20 }),
+        "Google Hybrid": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20 }),
+        "OSM": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20 })
+        };
+        
+        L.control.scale({ position: 'bottomleft' }).addTo(map);
+        var currentLayer = tileLayers["Google Satellite"].addTo(map);
+        document.getElementById('loading').style.display = 'none'; // پس از بارگذاری داده‌ها مخفی شود
+    
+        // تعریف لایه‌ها به صورت جداگانه
+        var regionLayer; // لایه شهرستان‌ها
+        var markers; // لایه مدارس
+    
+        // بارگذاری لایه شهرستان‌ها
+        fetch('Region_Nam.geojson')
+            .then(response => response.json())
+            .then(data => {
+                regionLayer = L.geoJSON(data, {
+                    style: () => ({ color: getRandomColor(), weight: 2, fillOpacity: 0.5 }),
+                    onEachFeature: (feature, layer) => {
+                        if (feature.properties) {
+                            layer.bindPopup("Name: " + feature.properties.Region_Nam + "<br>Description: " + feature.properties.description);
+                        }
+                    }
+                });
+    
+                // اضافه کردن لایه شهرستان‌ها به نقشه (به طور پیش‌فرض)
+                regionLayer.addTo(map);
+            })
+            .catch(error => console.error('Error loading region GeoJSON:', error));
+    
+        // بارگذاری لایه مدارس
+        fetch('school.geojson')
+            .then(response => response.json())
+            .then(data => {
+                markers = L.markerClusterGroup({
+                    spiderfyOnMaxZoom: true,
+                    showCoverageOnHover: false,
+                    zoomToBoundsOnClick: true,
+                    maxClusterRadius: 80,
+                    iconCreateFunction: function (cluster) {
+                        var count = cluster.getChildCount();
+                        var color = 'gray';
+                        if (count >= 0 && count <= 10) color = 'purple';
+                        else if (count >= 11 && count <= 20) color = 'orange';
+                        else if (count >= 21 && count <= 30) color = 'blue';
+                        else color = 'red';
+                        return L.divIcon({
+                            html: `<div style="background-color: ${color}; color: white; border-radius: 50%; width: 40px; height: 40px; text-align: center; line-height: 40px;">${count}</div>`,
+                            className: 'custom-cluster-icon',
+                            iconSize: L.point(40, 40)
+                        });
+                    }
+                });
+    
+                L.geoJSON(data, {
+                    pointToLayer: function (feature, latlng) {
+                        return L.marker(latlng, {
+                            icon: L.icon({
+                                iconUrl: 'https://unpkg.com/leaflet/dist/images/marker-icon.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41]
+                            })
+                        }).bindPopup("نام مدرسه: " + feature.properties.name + "<br>نوع : " + feature.properties.No + "<br>مقطع تحصیلی: " + feature.properties.Maght
+                          +"<br> آدرس  : " + feature.properties.Address + "<br>شماره تماس مدیر: " + feature.properties.Phone
+                          +"<br>   ناحیه: " + feature.properties.Nahieh + "<br> جنسیت : " + feature.properties.gender+"<br> تعداد کلاس : " + feature.properties.CLASS
+                        
+                        ); }
+                }).eachLayer(function (layer) {
+                    markers.addLayer(layer);
+                });
+    
+                // اضافه کردن لایه مدارس به نقشه (به طور پیش‌فرض)
+                markers.addTo(map);
+            })
+            .catch(error => console.error('Error loading school GeoJSON:', error));
+    
+        // تابع نمایش/مخفی کردن لایه شهرستان‌ها
+        function toggleRegionLayer() {
+            var checkbox = document.getElementById('regionCheckbox');
+            if (checkbox.checked) {
+                regionLayer.addTo(map); // نمایش لایه
+            } else {
+                map.removeLayer(regionLayer); // مخفی کردن لایه
+            }
+        }
+    
+        // تابع نمایش/مخفی کردن لایه مدارس
+        function toggleSchoolLayer() {
+            var checkbox = document.getElementById('schoolLayerCheckbox');
+            if (checkbox.checked) {
+                markers.addTo(map); // نمایش لایه
+            } else {
+                map.removeLayer(markers); // مخفی کردن لایه
+            }
+        }
+            // تابع تولید رنگ تصادفی
+    function getRandomColor() {
+        return '#' + Math.floor(Math.random() * 16777215).toString(16);
+    }
+
+    // نمایش/مخفی کردن منوی پایه‌نقشه‌ها
+    let isBasemapsOpen = false;
+    function toggleBasemaps() {
+        const dropdown = document.getElementById('basemapsDropdown');
+        isBasemapsOpen = !isBasemapsOpen;
+        dropdown.style.display = isBasemapsOpen ? 'grid' : 'none';
+    }
+
+    // تغییر پایه‌نقشه
+    function setBasemap(type) {
+        if (currentLayer) map.removeLayer(currentLayer);
+        currentLayer = tileLayers[type];
+        if (currentLayer) currentLayer.addTo(map);
+    }
+
+    // نمایش/مخفی کردن جعبه جستجو
+    function toggleSearch() {
+        var searchBox = document.getElementById('searchBox');
+        searchBox.style.display = searchBox.style.display === 'none' || searchBox.style.display === '' ? 'block' : 'none';
+    }
+
+    function searchSchool() {
+        var query = document.getElementById('searchInput').value.toLowerCase();
+        var found = false;
+        markers.eachLayer(layer => {
+            var schoolName = layer.feature.properties.name ? layer.feature.properties.name.toLowerCase() : '';
+            var schoolRegion = layer.feature.properties.region ? layer.feature.properties.region.toLowerCase() : '';
+            var schoolType = layer.feature.properties.type ? layer.feature.properties.type.toLowerCase() : '';
+            if (schoolName.includes(query) || schoolRegion.includes(query) || schoolType.includes(query)) {
+                map.setView(layer.getLatLng(), 15);
+                layer.openPopup();
+                found = true;
+            }
+        });
+        if (!found) {
+            alert("مدرسه‌ای با این نام پیدا نشد.");
+        }
+        document.getElementById('searchBox').style.display = 'none';
+    }
+
+    // یافتن نزدیک‌ترین مدرسه
+    function findNearestSchool() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(position => {
+                var lat = position.coords.latitude;
+                var lng = position.coords.longitude;
+                var userLocation = L.latLng(lat, lng);
+                var nearestSchool = null;
+                var nearestDistance = Infinity;
+                markers.eachLayer(layer => {
+                    var schoolLocation = layer.getLatLng();
+                    var distance = userLocation.distanceTo(schoolLocation);
+                    if (distance < nearestDistance) {
+                        nearestDistance = distance;
+                        nearestSchool = layer;
+                    }
+                });
+                if (nearestSchool) {
+                    map.setView(nearestSchool.getLatLng(), 15);
+                    nearestSchool.openPopup();
+                } else {
+                    alert("هیچ مدرسه‌ای پیدا نشد.");
+                }
+            }, () => alert("Unable to retrieve your location."));
+        } else {
+            alert("Your browser does not support Geolocation.");
+        }
+    }
+
+    function clearSearch() {
+        document.getElementById('searchInput').value = '';
+    }
+
+    // نمایش مختصات موس
+    map.on('mousemove', e => {
+        document.getElementById('coordinates').innerHTML = 'Coordinates: ' + e.latlng.lng.toFixed(5) + ', ' + e.latlng.lat.toFixed(5);
+    });
+
+    // چاپ نقشه
+    function printMap() { window.print(); }
+
+    // یافتن موقعیت کاربر
+    function findLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(position => {
+                var latLng = L.latLng(position.coords.latitude, position.coords.longitude);
+                map.setView(latLng, 15);
+                L.marker(latLng).addTo(map).bindPopup("You are here!").openPopup();
+            }, () => {
+                var message = document.createElement('div');
+                message.innerText = "Error finding your location.";
+                message.style.position = 'absolute';
+                message.style.bottom = '50px';
+                message.style.left = '10px';
+                message.style.background = 'white';
+                message.style.padding = '10px';
+                message.style.border = '1px solid #ccc';
+                message.style.zIndex = '1002';
+                document.body.appendChild(message);
+                setTimeout(() => document.body.removeChild(message), 3000);
+            });
+        } else {
+            alert("Your browser does not support Geolocation.");
+        }
+    }
+
+    // بزرگ‌نمایی
+    function zoomIn() { map.zoomIn(); }
+
+    // کوچک‌نمایی
+    function zoomOut() { map.zoomOut(); }
+
+    // بازنشانی نمای نقشه
+    function resetView() { map.setView([36.009, 50.88], 10); }
+
+    // رفتن به مختصات خاص
+    function goToXY() {
+        var lat = prompt("Enter Latitude (e.g., 36.009):"),
+            lng = prompt("Enter Longitude (e.g., 50.88):");
+        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+            map.setView([parseFloat(lat), parseFloat(lng)], 15);
+        } else {
+            var message = document.createElement('div');
+            message.innerText = "Please enter valid coordinates.";
+            message.style.position = 'absolute';
+            message.style.bottom = '50px';
+            message.style.left = '10px';
+            message.style.background = 'white';
+            message.style.padding = '10px';
+            message.style.border = '1px solid #ccc';
+            message.style.zIndex = '1002';
+            document.body.appendChild(message);
+            setTimeout(() => document.body.removeChild(message), 3000);
+        }
+    }
+
+    // نقشه مرور کلی
+    var overviewMap;
+    function toggleOverview() {
+        var overviewMapContainer = document.getElementById('overviewMap');
+        var boundingBox = document.getElementById('boundingBox');
+        if (overviewMapContainer.style.display === 'none' || overviewMapContainer.style.display === '') {
+            overviewMapContainer.style.display = 'block';
+            var karajCenter = [35.8400, 50.9391];
+            overviewMap = L.map('overviewMap', {
+                zoomControl: false,
+                attributionControl: false,
+                dragging: true,
+                touchZoom: false,
+                scrollWheelZoom: true,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: true
+            }).setView(karajCenter, 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19
+            }).addTo(overviewMap);
+            updateBoundingBox();
+            map.on('moveend zoomend', updateBoundingBox);
+        } else {
+            overviewMapContainer.style.display = 'none';
+            if (overviewMap) {
+                overviewMap.remove();
+                overviewMap = null;
+            }
+        }
+    }
+
+    // به‌روزرسانی محدوده نقشه مرور
+    function updateBoundingBox() {
+        var boundingBox = document.getElementById('boundingBox');
+        if (!overviewMap || !boundingBox) return;
+        var bounds = map.getBounds();
+        var topLeft = overviewMap.latLngToLayerPoint(bounds.getNorthWest());
+        var bottomRight = overviewMap.latLngToLayerPoint(bounds.getSouthEast());
+        boundingBox.style.top = topLeft.y + 'px';
+        boundingBox.style.left = topLeft.x + 'px';
+        boundingBox.style.width = (bottomRight.x - topLeft.x) + 'px';
+        boundingBox.style.height = (bottomRight.y - topLeft.y) + 'px';
+        boundingBox.style.display = 'block';
+    }
+
+    // ابزارهای رسم
+    var drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+    var drawControl = new L.Control.Draw({
+        edit: { featureGroup: drawnItems },
+        draw: { polygon: true, polyline: true, marker: true, rectangle: false, circle: false, circlemarker: false }
+    });
+
+    document.getElementById('drawPolygon').onclick = () => {
+        showTools('polygonTools');
+        new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable();
+    };
+    document.getElementById('drawPolyline').onclick = () => {
+        showTools('polylineTools');
+        new L.Draw.Polyline(map, drawControl.options.draw.polyline).enable();
+    };
+    document.getElementById('drawMarker').onclick = () => {
+        showTools('markerTools');
+        new L.Draw.Marker(map, drawControl.options.draw.marker).enable();
+    };
+    document.getElementById('deleteTools').onclick = () => {
+        drawnItems.clearLayers();
+        document.getElementById('areaValue').innerText = '0';
+        document.getElementById('lengthValue').innerText = '0';
+        document.getElementById('coordinateValue').innerText = '0, 0';
+        hideAllTools();
+    };
+
+    function showTools(toolId) {
+        hideAllTools();
+        var toolElement = document.getElementById(toolId);
+        if (toolElement) toolElement.style.display = 'block';
+    }
+
+    function hideAllTools() {
+        document.querySelectorAll('.shape-tools').forEach(tool => tool.style.display = 'none');
+    }
+
+    map.on(L.Draw.Event.CREATED, event => {
+        var layer = event.layer;
+        drawnItems.addLayer(layer);
+        if (layer instanceof L.Polygon) {
+            var area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+            var unit = document.getElementById('unitSelectPolygon').value;
+            if (unit === 'km2') area /= 1000000;
+            document.getElementById('areaValue').innerText = area.toFixed(2);
+        }
+        if (layer instanceof L.Polyline) {
+            var length = calculateLength(layer.getLatLngs());
+            var unit = document.getElementById('unitSelectPolyline').value;
+            if (unit === 'km') length /= 1000;
+            document.getElementById('lengthValue').innerText = length.toFixed(2);
+        }
+        if (layer instanceof L.Marker) {
+            var latLng = layer.getLatLng();
+            var coordSystem = document.getElementById('coordSystemSelect').value;
+            var coordsDisplay = '';
+            if (coordSystem === 'degree') {
+                coordsDisplay = `Lat: ${latLng.lat.toFixed(6)}<br>Lng: ${latLng.lng.toFixed(6)}`;
+            } else if (coordSystem === 'dms') {
+                coordsDisplay = `Lat: ${toDMS(latLng.lat)}<br>Lng: ${toDMS(latLng.lng)}`;
+            } else if (coordSystem === 'utm') {
+                var utmCoords = latLngToUtm(latLng.lat, latLng.lng);
+                coordsDisplay = `Easting: ${utmCoords.easting.toFixed(2)}<br>Northing: ${utmCoords.northing.toFixed(2)}<br>Zone: ${utmCoords.zone}`;
+            }
+            document.getElementById('coordinateValue').innerHTML = coordsDisplay;
+        }
+    });
+
+    function calculateLength(latlngs) {
+        let totalLength = 0;
+        for (let i = 0; i < latlngs.length - 1; i++) {
+            totalLength += latlngs[i].distanceTo(latlngs[i + 1]);
+        }
+        return totalLength;
+    }
+
+    function toDMS(coordinate) {
+        var degrees = Math.floor(coordinate);
+        var minutes = Math.floor((coordinate - degrees) * 60);
+        var seconds = Math.round(((coordinate - degrees) * 60 - minutes) * 60);
+        return degrees + '° ' + minutes + "' " + seconds + '"';
+    }
+
+    var drawControlVisible = false;
+    document.getElementById('toggleDraw').onclick = () => {
+        drawControlVisible = !drawControlVisible;
+        document.getElementById('customDrawToolbar').style.display = drawControlVisible ? 'block' : 'none';
+    };
+</script>
+</body>
+</html>
